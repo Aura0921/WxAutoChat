@@ -83,15 +83,7 @@ A: 在 `data/avatars/{角色}/emojis/` 目录下：
 A: 
 - DeepSeek: [硅基流动](https://cloud.siliconflow.cn/i/aQXU6eC5)
 - Moonshot: [月之暗面](https://platform.moonshot.cn/)
-
----
-
-## 🌐 社区互动
-
-- **QQ 交流群**：[715616260](https://jq.qq.com/?_wv=1027&k=5z4Q0i7o)
-- **哔哩哔哩**：[视频频道](https://space.bilibili.com/209397245)
-- **联系邮箱**：[yangchenglin2004@foxmail.com](mailto:yangchenglin2004@foxmail.com)
-
+- Customization: 通过 WebUI 配置界面输入满足OpanAI格式的 API 和 API Key.
 ---
 
 ## 💖 支持与鸣谢
@@ -125,5 +117,3 @@ A:
 本项目采用 MIT 许可证 - 详见 [LICENSE](LICENSE) 文件
 
 ---
-
-[![Star History](https://api.star-history.com/svg?repos=iwyxdxl/My-Dream-Moments&type=Timeline)](https://star-history.com/#iwyxdxl/My-Dream-Moments)
