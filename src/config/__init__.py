@@ -58,14 +58,29 @@ class ContextSettings:
     avatar_dir: str  # 人设目录路径，prompt文件和表情包目录都将基于此路径
 
 @dataclass
+class ReplyDelaySettings:
+    min_seconds: float
+    max_seconds: float
+
+@dataclass
 class BehaviorSettings:
     auto_message: AutoMessageSettings
     quiet_time: QuietTimeSettings
     context: ContextSettings
+    reply_delay: ReplyDelaySettings
 
 @dataclass
 class AuthSettings:
     admin_password: str
+
+@dataclass
+class BotApiSettings:
+    """机器人进程内 HTTP API（发消息、日志、热更新等）"""
+    enabled: bool
+    host: str
+    port: int
+    token: str
+    config_poll_seconds: float
 
 @dataclass
 class Config:
@@ -75,7 +90,17 @@ class Config:
         self.media: MediaSettings
         self.behavior: BehaviorSettings
         self.auth: AuthSettings
+        self.bot_api: BotApiSettings
         self.load_config()
+
+    def reload(self) -> bool:
+        """从磁盘重新加载 config.json（热更新）。"""
+        try:
+            self.load_config()
+            return True
+        except Exception as e:
+            logger.error(f"重新加载配置失败: {str(e)}")
+            return False
     
     @property
     def config_dir(self) -> str:
@@ -186,6 +211,10 @@ class Config:
                     context=ContextSettings(
                         max_groups=behavior_data['context']['max_groups']['value'],
                         avatar_dir=behavior_data['context']['avatar_dir']['value']
+                    ),
+                    reply_delay=ReplyDelaySettings(
+                        min_seconds=behavior_data['reply_delay']['min_seconds']['value'],
+                        max_seconds=behavior_data['reply_delay']['max_seconds']['value']
                     )
                 )
                 
@@ -194,6 +223,30 @@ class Config:
                 self.auth = AuthSettings(
                     admin_password=auth_data['admin_password']['value']
                 )
+
+                # 机器人 HTTP API（可选）
+                bot_api_cat = categories.get('bot_api_settings') or {}
+                bot_api_settings = bot_api_cat.get('settings') if isinstance(bot_api_cat, dict) else None
+                if bot_api_settings:
+                    def _g(key: str, default):
+                        block = bot_api_settings.get(key) or {}
+                        return block.get('value', default)
+
+                    self.bot_api = BotApiSettings(
+                        enabled=bool(_g('enabled', True)),
+                        host=str(_g('host', '127.0.0.1')),
+                        port=int(_g('port', 8555)),
+                        token=str(_g('token', '') or ''),
+                        config_poll_seconds=float(_g('config_poll_seconds', 2.0)),
+                    )
+                else:
+                    self.bot_api = BotApiSettings(
+                        enabled=True,
+                        host='127.0.0.1',
+                        port=8555,
+                        token='',
+                        config_poll_seconds=2.0,
+                    )
                 
         except Exception as e:
             logger.error(f"加载配置文件失败: {str(e)}")

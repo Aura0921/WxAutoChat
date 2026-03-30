@@ -8,9 +8,11 @@ logger = logging.getLogger(__name__)
 
 
 class MemoryHandler:
-    def __init__(self, root_dir: str, api_key: str, base_url: str, model: str, max_token: int, temperature: float, max_groups: int):
+    def __init__(self, root_dir: str, api_key: str, base_url: str, model: str, max_token: int, temperature: float, max_groups: int, user_id: str = None):
         self.root_dir = root_dir
         self.memory_dir = os.path.join(root_dir, "data", "memory")
+        if user_id:
+            self.memory_dir = os.path.join(self.memory_dir, user_id)
         self.short_memory_path = os.path.join(self.memory_dir, "short_memory.txt")
         self.long_memory_buffer_path = os.path.join(self.memory_dir, "long_memory_buffer.txt")
         self.api_key = api_key

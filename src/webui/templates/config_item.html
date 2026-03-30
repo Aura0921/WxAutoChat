@@ -85,25 +85,10 @@
         readonly
         style="display: none;">
 {% elif key == 'DEEPSEEK_BASE_URL' %}
-    <div class="mb-3">
-        <select class="form-select mb-2" onchange="updateDeepseekUrl(this.value)">
-            <option value="siliconflow" {% if config.value == 'https://api.siliconflow.cn/v1/' %}selected{% endif %}>硅基流动</option>
-            <option value="deepseek" {% if config.value == 'https://api.deepseek.com/v1' %}selected{% endif %}>deepseek</option>
-        </select>
-        <div class="d-flex align-items-center">
-            <a href="{{ 'https://www.siliconflow.cn' if config.value == 'https://api.siliconflow.cn/v1/' else 'https://platform.deepseek.com' }}" 
-                class="btn btn-primary w-100"
-                target="_blank"
-                id="register_link">
-                <i class="bi bi-box-arrow-up-right me-1"></i>点我注册
-            </a>
-        </div>
-        <input type="text" class="form-control" 
-            id="{{ key }}" name="{{ key }}" 
-            value="{{ config.value }}"
-            readonly
-            style="display: none;">
-    </div>
+    <input type="text" class="form-control"
+        id="{{ key }}" name="{{ key }}"
+        value="{{ config.value }}"
+        placeholder="请输入 API 基础 URL">
 {% elif key == 'PROMPT_ENHANCEMENT' %}
     <select class="form-select" id="{{ key }}" name="{{ key }}">
         <option value="True" {% if config.value %}selected{% endif %}>启用</option>
@@ -128,17 +113,10 @@
         </label>
     </div>
 {% elif key == 'MODEL' %}
-    <select class="form-select mb-2" onchange="document.getElementById('MODEL').value = this.value">
-        <option value="deepseek-ai/DeepSeek-V3">硅基流动V3模型（免费额度版）</option>
-        <option value="deepseek-ai/DeepSeek-R1">硅基流动R1模型（免费额度版）</option>
-        <option value="Pro/deepseek-ai/DeepSeek-V3">硅基流动V3模型（付费版）</option>
-        <option value="Pro/deepseek-ai/DeepSeek-R1">硅基流动R1模型（付费版）</option>
-        <option value="deepseek-chat">deepseek官方V3模型</option>
-        <option value="deepseek-reasoner">deepseek官方R1模型</option>
-    </select>
-    <input type="text" class="form-control" 
+    <input type="text" class="form-control"
         id="{{ key }}" name="{{ key }}" 
-        value="{{ config.value }}">
+        value="{{ config.value }}"
+        placeholder="请输入模型名称">
 {% elif config.type == "number" %}
     {% if key == 'MAX_TOKEN' %}
         <style>
@@ -396,19 +374,12 @@
             {% if config.max is defined %}max="{{ config.max }}"{% endif %}>
     {% endif %}
 {% elif key == 'MOONSHOT_API_KEY' %}
-    <div class="mb-3">
-        <input type="text" class="form-control mb-2" 
-            id="{{ key }}" name="{{ key }}" 
-            value="{{ config.value }}"
-            placeholder="请输入 Moonshot API 密钥">
-        <a href="https://platform.moonshot.cn/console/api-keys" 
-            class="btn btn-primary w-100"
-            target="_blank">
-            <i class="bi bi-box-arrow-up-right me-1"></i>点我注册
-        </a>
-    </div>
+    <input type="text" class="form-control"
+        id="{{ key }}" name="{{ key }}"
+        value="{{ config.value }}"
+        placeholder="请输入 Moonshot API 密钥">
 {% else %}
     <input type="text" class="form-control" 
         id="{{ key }}" name="{{ key }}" 
         value="{{ config.value }}">
-{% endif %} 
+{% endif %}

@@ -1,4 +1,6 @@
 import base64
+import sys
+
 import requests
 import logging
 import random
@@ -12,6 +14,7 @@ from config import config, DEEPSEEK_API_KEY, DEEPSEEK_BASE_URL, MODEL, MAX_TOKEN
 from wxauto import WeChat
 import re
 import pyautogui
+import pygetwindow as gw
 from handlers.emoji import EmojiHandler
 from handlers.image import ImageHandler
 from handlers.message import MessageHandler
@@ -52,17 +55,13 @@ chat_contexts = {}  # 存储上下文
 init()
 
 class ChatBot:
-    def __init__(self, message_handler, moonshot_ai):
+    def __init__(self, message_handler, moonshot_ai, robot_name):
         self.message_handler = message_handler
         self.moonshot_ai = moonshot_ai
+        self.robot_name = robot_name
         self.user_queues = {}  # 将user_queues移到类的实例变量
         self.queue_lock = threading.Lock()  # 将queue_lock也移到类的实例变量
         
-        # 获取机器人的微信名称
-        self.wx = WeChat()
-        self.robot_name = self.wx.A_MyIcon.Name  # 移除括号，直接访问Name属性
-        logger.info(f"机器人名称: {self.robot_name}")
-
     def process_user_messages(self, chat_id):
         """处理用户消息队列"""
         try:
@@ -219,9 +218,37 @@ moonshot_ai = MoonShotAI(
 )
 
 # 获取机器人名称
-wx = WeChat()
-ROBOT_WX_NAME = wx.A_MyIcon.Name
-logger.info(f"获取到机器人名称: {ROBOT_WX_NAME}")
+def initialize_wechat():
+    """初始化微信客户端，带重试机制"""
+    max_retries = 3
+    retry_delay = 5
+    
+    for attempt in range(max_retries):
+        try:
+            logger.info(f"尝试初始化微信客户端 (尝试 {attempt + 1}/{max_retries})...")
+            wx = WeChat()
+            # 等待微信窗口完全加载
+            time.sleep(3)
+            # 尝试获取机器人名称来验证初始化成功
+            robot_name = wx.A_MyIcon.Name
+            logger.info(f"微信客户端初始化成功，机器人名称: {robot_name}")
+            return wx, robot_name
+        except Exception as e:
+            logger.warning(f"微信客户端初始化失败 (尝试 {attempt + 1}/{max_retries}): {str(e)}")
+            if attempt < max_retries - 1:
+                logger.info(f"等待 {retry_delay} 秒后重试...")
+                time.sleep(retry_delay)
+            else:
+                logger.error("微信客户端初始化失败，已达到最大重试次数")
+                raise e
+    
+    return None, None
+
+# 初始化微信
+wx, ROBOT_WX_NAME = initialize_wechat()
+if wx is None:
+    logger.error("无法初始化微信客户端，程序退出")
+    sys.exit(1)
 
 message_handler = MessageHandler(
     root_dir=root_dir,
@@ -235,10 +262,9 @@ message_handler = MessageHandler(
     prompt_content=prompt_content,
     image_handler=image_handler,
     emoji_handler=emoji_handler,
-    voice_handler=voice_handler,
-    memory_handler=memory_handler
+    voice_handler=voice_handler
 )
-chat_bot = ChatBot(message_handler, moonshot_ai)
+chat_bot = ChatBot(message_handler, moonshot_ai, ROBOT_WX_NAME)
 
 # 设置监听列表
 listen_list = config.user.listen_list
@@ -388,43 +414,90 @@ def message_listener():
 
 def initialize_wx_listener():
     """
-    初始化微信监听，包含重试机制
+    初始化微信监听，包含重试机制和更长的等待时间
     """
-    max_retries = 3
-    retry_delay = 2  # 秒
+    max_retries = 5  # 增加重试次数
+    retry_delay = 3  # 减少重试间隔
     
     for attempt in range(max_retries):
         try:
+            logger.info(f"尝试初始化微信监听 (尝试 {attempt + 1}/{max_retries})...")
+            
+            # 激活微信窗口
+            logger.info("激活微信窗口...")
+            if not activate_wechat_window():
+                logger.warning("无法激活微信窗口，继续尝试初始化...")
+            
+            # 创建微信实例
             wx = WeChat()
-            if not wx.GetSessionList():
-                logger.error("未检测到微信会话列表，请确保微信已登录")
-                time.sleep(retry_delay)
-                continue
-                
-            # 循环添加监听对象，修改savepic参数为False
+            
+            # 等待微信窗口完全加载 - 增加等待时间
+            logger.info("等待微信窗口加载...")
+            time.sleep(8)  # 增加等待时间
+            
+            # 多次检查会话列表是否可用
+            session_check_attempts = 5  # 增加检查次数
+            for check_attempt in range(session_check_attempts):
+                try:
+                    logger.info(f"检查微信会话列表 (检查 {check_attempt + 1}/{session_check_attempts})...")
+                    if wx.GetSessionList():
+                        logger.info("微信会话列表检查成功")
+                        break
+                    else:
+                        logger.warning(f"微信会话列表检查失败 (检查 {check_attempt + 1}/{session_check_attempts})")
+                        if check_attempt < session_check_attempts - 1:
+                            time.sleep(3)  # 增加等待时间
+                        else:
+                            raise Exception("无法获取微信会话列表")
+                except Exception as e:
+                    logger.warning(f"检查会话列表时出错: {str(e)}")
+                    if check_attempt < session_check_attempts - 1:
+                        time.sleep(3)
+                    else:
+                        raise e
+            
+            # 循环添加监听对象
+            success_count = 0
             for chat_name in listen_list:
                 try:
-                    # 先检查会话是否存在
+                    logger.info(f"尝试添加监听: {chat_name}")
+                    
+                    # 激活微信窗口确保在前台
+                    if not activate_wechat_window():
+                        logger.warning(f"无法激活微信窗口，继续尝试添加监听 {chat_name}...")
+                    
+                    # 额外等待确保窗口稳定
+                    time.sleep(2)
+                    
+                    # 先检查会话是否存在 - 增加超时时间
+                    logger.info(f"搜索会话: {chat_name}")
                     if not wx.ChatWith(chat_name):
                         logger.error(f"找不到会话: {chat_name}")
                         continue
                         
-                    # 尝试添加监听，设置savepic=False
+                    # 尝试添加监听
                     wx.AddListenChat(who=chat_name, savepic=True)
                     logger.info(f"成功添加监听: {chat_name}")
-                    time.sleep(0.5)  # 添加短暂延迟，避免操作过快
+                    success_count += 1
+                    time.sleep(2)  # 增加延迟，避免操作过快
                 except Exception as e:
                     logger.error(f"添加监听失败 {chat_name}: {str(e)}")
                     continue
-                    
-            return wx
+            
+            if success_count > 0:
+                logger.info(f"微信监听初始化完成，成功添加 {success_count}/{len(listen_list)} 个监听对象")
+                return wx
+            else:
+                raise Exception(f"未能成功添加任何监听对象")
             
         except Exception as e:
-            logger.error(f"初始化微信失败 (尝试 {attempt + 1}/{max_retries}): {str(e)}")
+            logger.error(f"初始化微信监听失败 (尝试 {attempt + 1}/{max_retries}): {str(e)}")
             if attempt < max_retries - 1:
+                logger.info(f"等待 {retry_delay} 秒后重试...")
                 time.sleep(retry_delay)
             else:
-                raise Exception("微信初始化失败，请检查微信是否正常运行")
+                logger.error("微信监听初始化失败，已达到最大重试次数")
+                return None
     
     return None
 
@@ -559,6 +632,37 @@ def main():
             print_status("微信初始化失败，请确保微信已登录并保持在前台运行!", "error", "❌")
             return
         print_status("微信监听初始化完成", "success", "✅")
+
+        def apply_hot_config():
+            """从磁盘重载 config.json，并同步监听列表与 LLM 参数（无需重启主进程）。"""
+            global listen_list
+            if not config.reload():
+                return False
+            listen_list = config.user.listen_list
+            message_handler.refresh_runtime_settings()
+            return True
+
+        def config_poll_loop():
+            path = config.config_path
+            try:
+                last = os.path.getmtime(path)
+            except OSError:
+                last = 0.0
+            while True:
+                time.sleep(max(0.5, float(config.bot_api.config_poll_seconds)))
+                try:
+                    mtime = os.path.getmtime(path)
+                    if mtime > last:
+                        last = mtime
+                        if apply_hot_config():
+                            logger.info("已从磁盘热更新 config.json")
+                except Exception as e:
+                    logger.error(f"配置热更新轮询失败: {str(e)}")
+
+        from api.bot_http_api import start_bot_api_server
+        start_bot_api_server(message_handler, on_config_reload=apply_hot_config)
+        threading.Thread(target=config_poll_loop, daemon=True, name="ConfigPoll").start()
+
         print_status("检查短期记忆...", "info", "🔍")
 
         memory_handler.summarize_memories()  # 启动时处理残留记忆
@@ -648,3 +752,23 @@ if __name__ == '__main__':
         print("\n")
     except Exception as e:
         print_status(f"程序异常退出: {str(e)}", "error", "💥")
+
+def activate_wechat_window():
+    """激活微信窗口，确保它在前台运行"""
+    try:
+        # 查找微信窗口
+        wechat_windows = gw.getWindowsWithTitle('微信')
+        if wechat_windows:
+            wechat_window = wechat_windows[0]
+            if wechat_window.isMinimized:
+                wechat_window.restore()
+            wechat_window.activate()
+            time.sleep(1)  # 等待窗口激活
+            logger.info("微信窗口已激活")
+            return True
+        else:
+            logger.warning("未找到微信窗口")
+            return False
+    except Exception as e:
+        logger.warning(f"激活微信窗口失败: {str(e)}")
+        return False

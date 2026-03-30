@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>记忆管理 - KouriChat</title>
+    <link href="/static/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdmirror.com/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+    <link rel="icon" type="image/x-icon" href="/static/mom.ico">
+</head>
+<body class="bg-light">
+    <!-- 导航栏 -->
+    <nav class="navbar navbar-expand-lg navbar-dark bg-primary">
+        <div class="container">
+            <a class="navbar-brand" href="/dashboard">
+                <i class="bi bi-robot"></i> KouriChat
+            </a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav me-auto">
+                    <li class="nav-item">
+                        <a class="nav-link" href="/dashboard">
+                            <i class="bi bi-house-door"></i> 控制台
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/config">
+                            <i class="bi bi-gear"></i> 配置中心
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link active" href="/memory">
+                            <i class="bi bi-brain"></i> 记忆管理
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/api_monitor">
+                            <i class="bi bi-activity"></i> API监控
+                        </a>
+                    </li>
+                </ul>
+                <ul class="navbar-nav">
+                    <li class="nav-item">
+                        <a class="nav-link" href="/logout">
+                            <i class="bi bi-box-arrow-right"></i> 退出
+                        </a>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container mt-4">
+        <div class="row">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="card-title mb-0">
+                            <i class="bi bi-brain"></i> 记忆管理
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="mb-3">
+                            <label for="userSelect" class="form-label">选择用户</label>
+                            <select class="form-select" id="userSelect">
+                                <option value="">请选择用户...</option>
+                            </select>
+                        </div>
+                        <div id="memoryContent" class="memory-content">
+                            <div class="alert alert-info">
+                                <i class="bi bi-info-circle"></i> 请选择一个用户来查看记忆内容
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 编辑记忆模态框 -->
+    <div class="modal fade" id="editMemoryModal" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">编辑记忆</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="editMemoryForm">
+                        <div class="mb-3">
+                            <label for="memoryText" class="form-label">记忆内容</label>
+                            <textarea class="form-control" id="memoryText" rows="10"></textarea>
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                    <button type="button" class="btn btn-primary" id="saveMemoryBtn">保存</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="/static/js/bootstrap.bundle.min.js"></script>
+    <script>
+        let currentUserId = '';
+        let currentMemoryType = '';
+
+        // 加载用户列表
+        async function loadUsers() {
+            try {
+                const response = await fetch('/api/v1/messages/recent?limit=1000');
+                const data = await response.json();
+                if (data.ok) {
+                    const users = new Set();
+                    data.messages.forEach(msg => {
+                        users.add(msg.sender_id);
+                    });
+                    const userSelect = document.getElementById('userSelect');
+                    userSelect.innerHTML = '<option value="">请选择用户...</option>';
+                    Array.from(users).sort().forEach(userId => {
+                        const option = document.createElement('option');
+                        option.value = userId;
+                        option.textContent = userId;
+                        userSelect.appendChild(option);
+                    });
+                }
+            } catch (error) {
+                console.error('加载用户列表失败:', error);
+            }
+        }
+
+        // 加载用户记忆
+        async function loadUserMemory(userId) {
+            try {
+                const response = await fetch(`/get_user_memory?user_id=${encodeURIComponent(userId)}`);
+                const data = await response.json();
+                displayMemory(data);
+            } catch (error) {
+                console.error('加载记忆失败:', error);
+                document.getElementById('memoryContent').innerHTML =
+                    '<div class="alert alert-danger"><i class="bi bi-exclamation-triangle"></i> 加载记忆失败</div>';
+            }
+        }
+
+        // 显示记忆内容
+        function displayMemory(data) {
+            const container = document.getElementById('memoryContent');
+            if (!data.short_memory && !data.long_memory) {
+                container.innerHTML = '<div class="alert alert-info"><i class="bi bi-info-circle"></i> 该用户暂无记忆内容</div>';
+                return;
+            }
+
+            let html = '';
+
+            if (data.short_memory) {
+                html += `
+                    <div class="mb-4">
+                        <h6 class="text-primary">
+                            <i class="bi bi-clock"></i> 短期记忆
+                            <button class="btn btn-sm btn-outline-primary ms-2" onclick="editMemory('${data.user_id}', 'short')">
+                                <i class="bi bi-pencil"></i> 编辑
+                            </button>
+                        </h6>
+                        <div class="border rounded p-3 bg-light">
+                            <pre class="mb-0">${data.short_memory}</pre>
+                        </div>
+                    </div>
+                `;
+            }
+
+            if (data.long_memory) {
+                html += `
+                    <div class="mb-4">
+                        <h6 class="text-success">
+                            <i class="bi bi-archive"></i> 长期记忆
+                            <button class="btn btn-sm btn-outline-success ms-2" onclick="editMemory('${data.user_id}', 'long')">
+                                <i class="bi bi-pencil"></i> 编辑
+                            </button>
+                        </h6>
+                        <div class="border rounded p-3 bg-light">
+                            <pre class="mb-0">${data.long_memory}</pre>
+                        </div>
+                    </div>
+                `;
+            }
+
+            container.innerHTML = html;
+        }
+
+        // 编辑记忆
+        function editMemory(userId, type) {
+            currentUserId = userId;
+            currentMemoryType = type;
+
+            // 获取当前记忆内容
+            fetch(`/get_user_memory?user_id=${encodeURIComponent(userId)}`)
+                .then(response => response.json())
+                .then(data => {
+                    const content = type === 'short' ? (data.short_memory || '') : (data.long_memory || '');
+                    document.getElementById('memoryText').value = content;
+                    new bootstrap.Modal(document.getElementById('editMemoryModal')).show();
+                })
+                .catch(error => {
+                    console.error('获取记忆内容失败:', error);
+                });
+        }
+
+        // 保存记忆
+        document.getElementById('saveMemoryBtn').addEventListener('click', async () => {
+            const content = document.getElementById('memoryText').value;
+
+            try {
+                const response = await fetch('/update_user_memory', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        user_id: currentUserId,
+                        type: currentMemoryType,
+                        content: content
+                    })
+                });
+
+                const data = await response.json();
+                if (data.status === 'success') {
+                    bootstrap.Modal.getInstance(document.getElementById('editMemoryModal')).hide();
+                    loadUserMemory(currentUserId);
+                    alert('记忆更新成功');
+                } else {
+                    alert('更新失败: ' + data.message);
+                }
+            } catch (error) {
+                console.error('保存记忆失败:', error);
+                alert('保存失败');
+            }
+        });
+
+        // 事件监听
+        document.getElementById('userSelect').addEventListener('change', (e) => {
+            const userId = e.target.value;
+            if (userId) {
+                loadUserMemory(userId);
+            } else {
+                document.getElementById('memoryContent').innerHTML =
+                    '<div class="alert alert-info"><i class="bi bi-info-circle"></i> 请选择一个用户来查看记忆内容</div>';
+            }
+        });
+
+        // 页面加载完成
+        document.addEventListener('DOMContentLoaded', () => {
+            loadUsers();
+        });
+    </script>
+</body>
+</html>

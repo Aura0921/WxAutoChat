@@ -57,6 +57,29 @@ class DeepSeekAI:
         # 安全字符白名单（可根据需要扩展）
         self.safe_pattern = re.compile(r'[\x00-\x1F\u202E\u200B]')
 
+    def refresh_runtime_settings(
+        self,
+        api_key: str,
+        base_url: str,
+        model: str,
+        max_token: int,
+        temperature: float,
+        max_groups: int,
+    ) -> None:
+        """热更新时重建客户端与推理参数（不清理对话上下文）。"""
+        self.client = OpenAI(
+            api_key=api_key,
+            base_url=base_url,
+            default_headers={
+                "Content-Type": "application/json",
+                "User-Agent": "MyDreamBot/1.0",
+            },
+        )
+        self.config["model"] = model
+        self.config["max_token"] = max_token
+        self.config["temperature"] = temperature
+        self.config["max_groups"] = max_groups
+
     def _manage_context(self, user_id: str, message: str, role: str = "user"):
         """
         上下文管理器（支持动态记忆窗口）

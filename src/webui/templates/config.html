@@ -602,19 +602,6 @@
             }
         }
 
-        function updateDeepseekUrl(value) {
-            const baseUrlInput = document.getElementById('DEEPSEEK_BASE_URL');
-            const registerLink = document.getElementById('register_link');
-            
-            if (value === 'siliconflow') {
-                baseUrlInput.value = 'https://api.siliconflow.cn/v1/';
-                registerLink.href = 'https://www.siliconflow.cn';
-            } else {
-                baseUrlInput.value = 'https://api.deepseek.com/v1';
-                registerLink.href = 'https://platform.deepseek.com';
-            }
-        }
-
         function showError(message) {
             const toast = document.querySelector('.toast');
             const toastMessage = toast.querySelector('.toast-message');

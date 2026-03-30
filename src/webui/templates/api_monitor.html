@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>KouriChat - API 监控</title>
+    <link href="/static/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdmirror.com/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+    <link rel="icon" type="image/x-icon" href="/static/mom.ico">
+    <script src="/static/js/dark-mode.js"></script>
+    <style>
+        :root {
+            --primary-color: #6366f1;
+            --card-bg: rgba(255, 255, 255, 0.85);
+            --card-border: rgba(255, 255, 255, 0.5);
+        }
+        [data-bs-theme="dark"] {
+            --card-bg: rgba(30, 41, 59, 0.85);
+            --card-border: rgba(255, 255, 255, 0.1);
+        }
+        body { background: var(--bs-body-bg); min-height: 100vh; }
+        .glass-panel {
+            background: var(--card-bg);
+            backdrop-filter: blur(10px);
+            border-radius: 1rem;
+            border: 1px solid var(--card-border);
+            padding: 1.25rem;
+            margin-bottom: 1.25rem;
+        }
+        .log-box {
+            font-family: Consolas, monospace;
+            font-size: 0.85rem;
+            max-height: 280px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+            word-break: break-all;
+        }
+        .mono { font-family: Consolas, monospace; font-size: 0.9rem; }
+    </style>
+</head>
+<body>
+    {% include 'navbar.html' %}
+    <main class="container py-4">
+        <h1 class="h4 mb-4"><i class="bi bi-broadcast-pin me-2"></i>机器人 API 监控</h1>
+        <p class="text-muted small mb-4">需先通过 <code>python run.py</code> 启动机器人进程；本页通过配置中的地址与令牌代理请求 <code>/api/v1/*</code>。</p>
+
+        <div class="glass-panel">
+            <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-2">
+                <span class="fw-semibold"><i class="bi bi-activity me-1"></i>状态</span>
+                <button type="button" class="btn btn-sm btn-outline-primary" id="btnRefreshStatus">刷新</button>
+            </div>
+            <pre class="mono mb-0" id="statusBox">加载中…</pre>
+        </div>
+
+        <div class="row g-3">
+            <div class="col-lg-6">
+                <div class="glass-panel h-100">
+                    <div class="fw-semibold mb-2"><i class="bi bi-send me-1"></i>发送消息</div>
+                    <div class="mb-2">
+                        <label class="form-label small">会话（好友昵称或群名）</label>
+                        <input type="text" class="form-control form-control-sm" id="sendWho" placeholder="与微信列表一致">
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label small">内容</label>
+                        <textarea class="form-control form-control-sm" id="sendText" rows="3"></textarea>
+                    </div>
+                    <div class="form-check form-switch mb-2">
+                        <input class="form-check-input" type="checkbox" id="sendUseLlm" checked>
+                        <label class="form-check-label small" for="sendUseLlm">经过大模型 API 生成回复（关闭则直发原文）</label>
+                    </div>
+                    <div class="form-check form-switch mb-2">
+                        <input class="form-check-input" type="checkbox" id="sendIsGroup">
+                        <label class="form-check-label small" for="sendIsGroup">群聊</label>
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label small">@ 的人（群聊可选，逗号分隔昵称）</label>
+                        <input type="text" class="form-control form-control-sm" id="sendAt" placeholder="例如：张三,李四">
+                    </div>
+                    <button type="button" class="btn btn-primary btn-sm" id="btnSend"><i class="bi bi-send me-1"></i>发送</button>
+                    <span class="text-muted small ms-2" id="sendResult"></span>
+                </div>
+            </div>
+            <div class="col-lg-6">
+                <div class="glass-panel h-100">
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <span class="fw-semibold"><i class="bi bi-clock-history me-1"></i>HTTP 调用日志</span>
+                        <button type="button" class="btn btn-sm btn-outline-secondary" id="btnRefreshLogs">刷新</button>
+                    </div>
+                    <div class="log-box border rounded p-2" id="apiLogsBox"></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="glass-panel">
+            <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-2">
+                <span class="fw-semibold"><i class="bi bi-chat-dots me-1"></i>最近聊天记录（数据库）</span>
+                <div class="d-flex gap-2 align-items-center">
+                    <input type="text" class="form-control form-control-sm" style="width:140px" id="filterChat" placeholder="筛选 chat 名">
+                    <button type="button" class="btn btn-sm btn-outline-primary" id="btnLoadMessages">加载</button>
+                </div>
+            </div>
+            <div class="table-responsive">
+                <table class="table table-sm table-hover mono small mb-0">
+                    <thead><tr><th>时间</th><th>发送者</th><th>消息</th><th>回复</th></tr></thead>
+                    <tbody id="msgTableBody"><tr><td colspan="4" class="text-muted">点击「加载」</td></tr></tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="glass-panel">
+            <div class="fw-semibold mb-2"><i class="bi bi-arrow-repeat me-1"></i>配置热更新</div>
+            <p class="small text-muted mb-2">保存「配置中心」后，机器人进程会按轮询间隔自动重载；也可手动触发一次（与磁盘上 config.json 同步）。</p>
+            <button type="button" class="btn btn-outline-warning btn-sm" id="btnReloadCfg"><i class="bi bi-arrow-clockwise me-1"></i>通知机器人重载配置</button>
+            <span class="small ms-2" id="reloadResult"></span>
+        </div>
+    </main>
+    <script src="/static/js/bootstrap.bundle.min.js"></script>
+    <script>
+    async function proxyGet(path) {
+        const r = await fetch('/bot_api_proxy/' + path, { credentials: 'same-origin' });
+        const t = await r.text();
+        try { return { ok: r.ok, json: JSON.parse(t), raw: t }; }
+        catch { return { ok: r.ok, json: null, raw: t }; }
+    }
+    async function proxyPost(path, body) {
+        const r = await fetch('/bot_api_proxy/' + path, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'same-origin',
+            body: JSON.stringify(body || {}),
+        });
+        const t = await r.text();
+        try { return { ok: r.ok, json: JSON.parse(t), raw: t }; }
+        catch { return { ok: r.ok, json: null, raw: t }; }
+    }
+
+    async function refreshStatus() {
+        const el = document.getElementById('statusBox');
+        const res = await proxyGet('status');
+        if (res.json && res.json.ok !== undefined) {
+            el.textContent = JSON.stringify(res.json, null, 2);
+        } else {
+            el.textContent = '无法连接机器人 API：\n' + (res.raw || '');
+        }
+    }
+
+    async function refreshLogs() {
+        const el = document.getElementById('apiLogsBox');
+        const res = await proxyGet('logs?limit=80');
+        if (res.json && res.json.ok && res.json.logs) {
+            el.textContent = res.json.logs.map(l =>
+                `[${l.time}] ${l.method} ${l.path} ${l.status} ${l.detail || ''}`
+            ).join('\n');
+        } else {
+            el.textContent = res.raw || '无日志';
+        }
+    }
+
+    document.getElementById('btnRefreshStatus').onclick = refreshStatus;
+    document.getElementById('btnRefreshLogs').onclick = refreshLogs;
+    document.getElementById('btnLoadMessages').onclick = async () => {
+        const q = document.getElementById('filterChat').value.trim();
+        const path = q ? ('messages/recent?limit=40&chat_id=' + encodeURIComponent(q)) : 'messages/recent?limit=40';
+        const res = await proxyGet(path);
+        const tbody = document.getElementById('msgTableBody');
+        tbody.innerHTML = '';
+        if (res.json && res.json.ok && res.json.messages) {
+            for (const m of res.json.messages) {
+                const tr = document.createElement('tr');
+                const t = (m.created_at || '').replace('T', ' ').slice(0, 19);
+                tr.innerHTML = `<td>${t}</td><td>${escapeHtml(m.sender_name || '')}</td><td>${escapeHtml((m.message||'').slice(0,120))}</td><td>${escapeHtml((m.reply||'').slice(0,120))}</td>`;
+                tbody.appendChild(tr);
+            }
+            if (!res.json.messages.length) tbody.innerHTML = '<tr><td colspan="4" class="text-muted">无记录</td></tr>';
+        } else {
+            tbody.innerHTML = '<tr><td colspan="4" class="text-danger">' + escapeHtml(res.raw || '请求失败') + '</td></tr>';
+        }
+    };
+    function escapeHtml(s) {
+        const d = document.createElement('div');
+        d.textContent = s;
+        return d.innerHTML;
+    }
+
+    document.getElementById('btnSend').onclick = async () => {
+        const who = document.getElementById('sendWho').value.trim();
+        const text = document.getElementById('sendText').value.trim();
+        const atRaw = document.getElementById('sendAt').value.trim();
+        const at_names = atRaw ? atRaw.split(/[,，]/).map(s => s.trim()).filter(Boolean) : [];
+        const res = await proxyPost('send', {
+            who, text,
+            use_llm: document.getElementById('sendUseLlm').checked,
+            is_group: document.getElementById('sendIsGroup').checked,
+            at_names,
+        });
+        const el = document.getElementById('sendResult');
+        el.textContent = res.json ? JSON.stringify(res.json) : (res.raw || '');
+        el.className = 'small ms-2 ' + (res.ok ? 'text-success' : 'text-danger');
+        refreshLogs();
+    };
+
+    document.getElementById('btnReloadCfg').onclick = async () => {
+        const res = await proxyPost('config/reload', {});
+        const el = document.getElementById('reloadResult');
+        el.textContent = res.json ? JSON.stringify(res.json) : (res.raw || '');
+        el.className = 'small ms-2 ' + (res.ok ? 'text-success' : 'text-danger');
+    };
+
+    refreshStatus();
+    refreshLogs();
+    setInterval(refreshStatus, 8000);
+    setInterval(refreshLogs, 5000);
+    </script>
+</body>
+</html>

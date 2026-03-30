@@ -223,6 +223,14 @@ def parse_config_groups() -> Dict[str, Dict[str, Any]]:
                 "value": config.behavior.quiet_time.end,
                 "description": "安静时间结束",
             },
+            "REPLY_DELAY_MIN_SECONDS": {
+                "value": config.behavior.reply_delay.min_seconds,
+                "description": "回复最小延迟时间（秒）",
+            },
+            "REPLY_DELAY_MAX_SECONDS": {
+                "value": config.behavior.reply_delay.max_seconds,
+                "description": "回复最大延迟时间（秒）",
+            },
         }
     )
 
@@ -257,6 +265,33 @@ def parse_config_groups() -> Dict[str, Dict[str, Any]]:
         }
     )
 
+    config_groups["机器人 HTTP API"] = {
+        "BOT_API_ENABLED": {
+            "value": config.bot_api.enabled,
+            "description": "是否启用机器人进程内 HTTP API（发消息、最近消息、日志等）",
+            "type": "boolean",
+        },
+        "BOT_API_HOST": {
+            "value": config.bot_api.host,
+            "description": "API 监听地址（仅本机建议 127.0.0.1）",
+        },
+        "BOT_API_PORT": {
+            "value": config.bot_api.port,
+            "description": "API 监听端口",
+            "type": "number",
+        },
+        "BOT_API_TOKEN": {
+            "value": config.bot_api.token,
+            "description": "API 访问令牌（留空则不校验）",
+            "is_secret": True,
+        },
+        "BOT_API_CONFIG_POLL_SECONDS": {
+            "value": float(config.bot_api.config_poll_seconds),
+            "description": "检测 config.json 变更并热更新的轮询间隔（秒）",
+            "type": "number",
+        },
+    }
+
     return config_groups
 
 
@@ -273,6 +308,7 @@ def save_config(new_config: Dict[str, Any]) -> bool:
             AutoMessageSettings,
             QuietTimeSettings,
             ContextSettings,
+            ReplyDelaySettings,
             BehaviorSettings,
             config
         )
@@ -332,6 +368,19 @@ def save_config(new_config: Dict[str, Any]) -> bool:
                 max_groups=int(new_config.get("MAX_GROUPS", 15)),
                 avatar_dir=new_config.get("AVATAR_DIR", ""),
             ),
+            reply_delay=ReplyDelaySettings(
+                min_seconds=float(new_config.get("REPLY_DELAY_MIN_SECONDS", 1.0)),
+                max_seconds=float(new_config.get("REPLY_DELAY_MAX_SECONDS", 5.0)),
+            ),
+        )
+
+        _ba = getattr(config, "bot_api", None)
+        bot_api_enabled = bool(new_config.get("BOT_API_ENABLED", _ba.enabled if _ba else True))
+        bot_api_host = str(new_config.get("BOT_API_HOST", _ba.host if _ba else "127.0.0.1"))
+        bot_api_port = int(new_config.get("BOT_API_PORT", _ba.port if _ba else 8555))
+        bot_api_token = str(new_config.get("BOT_API_TOKEN", _ba.token if _ba else ""))
+        bot_api_poll = float(
+            new_config.get("BOT_API_CONFIG_POLL_SECONDS", _ba.config_poll_seconds if _ba else 2.0)
         )
 
         # 构建JSON结构
@@ -364,12 +413,7 @@ def save_config(new_config: Dict[str, Any]) -> bool:
                         "model": {
                             "value": llm_settings.model,
                             "type": "string",
-                            "description": "使用的AI模型名称",
-                            "options": [
-                                "deepseek-ai/DeepSeek-V3",
-                                "Pro/deepseek-ai/DeepSeek-V3",
-                                "Pro/deepseek-ai/DeepSeek-R1",
-                            ],
+                            "description": "使用的AI模型名称（支持自定义模型）",
                         },
                         "max_tokens": {
                             "value": llm_settings.max_tokens,
@@ -480,6 +524,49 @@ def save_config(new_config: Dict[str, Any]) -> bool:
                                 "description": "人设目录（自动包含 avatar.md 和 emojis 目录）",
                             },
                         },
+                        "reply_delay": {
+                            "min_seconds": {
+                                "value": behavior_settings.reply_delay.min_seconds,
+                                "type": "number",
+                                "description": "最小回复延迟时间（秒）",
+                            },
+                            "max_seconds": {
+                                "value": behavior_settings.reply_delay.max_seconds,
+                                "type": "number",
+                                "description": "最大回复延迟时间（秒）",
+                            },
+                        },
+                    },
+                },
+                "bot_api_settings": {
+                    "title": "机器人 HTTP API",
+                    "settings": {
+                        "enabled": {
+                            "value": bot_api_enabled,
+                            "type": "boolean",
+                            "description": "是否启用机器人进程内的 HTTP API",
+                        },
+                        "host": {
+                            "value": bot_api_host,
+                            "type": "string",
+                            "description": "监听地址",
+                        },
+                        "port": {
+                            "value": bot_api_port,
+                            "type": "number",
+                            "description": "监听端口",
+                        },
+                        "token": {
+                            "value": bot_api_token,
+                            "type": "string",
+                            "description": "API 令牌（可选）",
+                            "is_secret": True,
+                        },
+                        "config_poll_seconds": {
+                            "value": bot_api_poll,
+                            "type": "number",
+                            "description": "热更新轮询间隔（秒）",
+                        },
                     },
                 },
             }
@@ -589,6 +676,56 @@ def dashboard():
         is_local=is_local_network(),
         active_page='dashboard'
     )
+
+
+@app.route('/api_monitor')
+def api_monitor():
+    """机器人 HTTP API 监控（发消息、日志、最近消息、热更新）"""
+    if not session.get('logged_in'):
+        return redirect(url_for('login'))
+    return render_template(
+        'api_monitor.html',
+        is_local=is_local_network(),
+        active_page='api_monitor',
+    )
+
+
+@app.route('/bot_api_proxy/<path:api_path>', methods=['GET', 'POST'])
+def bot_api_proxy(api_path):
+    """将 Web 控制台请求转发到机器人进程内的 HTTP API（避免跨域）。"""
+    try:
+        from src.config import config as cfg
+
+        ba = getattr(cfg, "bot_api", None)
+        if not ba:
+            return jsonify({'ok': False, 'error': '配置中缺少 bot_api'}), 400
+
+        base = f"http://127.0.0.1:{ba.port}"
+        url = f"{base}/api/v1/{api_path}"
+        headers = {}
+        tok = (ba.token or '').strip()
+        if tok:
+            headers['Authorization'] = f'Bearer {tok}'
+
+        if request.method == 'POST':
+            r = requests.post(
+                url,
+                json=request.get_json(silent=True),
+                headers=headers,
+                timeout=60,
+            )
+        else:
+            r = requests.get(url, params=request.args, headers=headers, timeout=30)
+
+        ct = r.headers.get('Content-Type', '')
+        if 'application/json' in ct:
+            try:
+                return jsonify(r.json()), r.status_code
+            except Exception:
+                return r.text, r.status_code
+        return r.text, r.status_code
+    except requests.exceptions.RequestException as e:
+        return jsonify({'ok': False, 'error': str(e)}), 502
 
 @app.route('/system_info')
 def system_info():
@@ -875,13 +1012,31 @@ def get_user_info():
         api_key = config.llm.api_key
         base_url = config.llm.base_url.rstrip('/')
         
-        # 确保使用正确的API端点
-        if 'siliconflow.cn' in base_url:
-            api_url = f"{base_url}/user/info"
-        else:
+        if not api_key:
             return jsonify({
                 'status': 'error',
-                'message': '当前API不支持查询用户信息'
+                'message': 'API密钥未设置，请在配置中心设置 DeepSeek API密钥'
+            })
+        
+        # 确保使用正确的API端点
+        if 'siliconflow.cn' in base_url.lower():
+            api_url = f"{base_url}/user/info"
+        elif 'deepseek' in base_url.lower():
+            api_url = f"{base_url}/user/info"
+        else:
+            # 对于其他OpenAI兼容API，尝试通用端点
+            api_url = f"{base_url}/v1/models"  # 或者尝试 /user/me 如果存在
+            # 如果不支持用户信息查询，返回一个友好的消息
+            return jsonify({
+                'status': 'success',
+                'data': {
+                    'balance': '未知',
+                    'total_balance': '未知',
+                    'charge_balance': '未知',
+                    'name': '自定义API',
+                    'email': '未知',
+                    'status': '活跃'
+                }
             })
         
         headers = {
@@ -1047,7 +1202,7 @@ type - 显示文件内容
             })
             
         elif command.lower() == 'stop':
-            if bot_process and bot_process.poll() is None:
+            if bot_process and bot_process.poll() is not None:
                 try:
                     # 首先尝试正常终止进程
                     bot_process.terminate()
@@ -1654,15 +1809,86 @@ def logout():
     session.clear()
     return redirect(url_for('login'))
 
-if __name__ == '__main__':
+@app.route('/memory')
+def memory():
+    """记忆管理页面"""
+    if not session.get('logged_in'):
+        return redirect(url_for('login'))
+    return render_template(
+        'memory.html',
+        is_local=is_local_network(),
+        active_page='memory'
+    )
+
+@app.route('/get_user_memory')
+def get_user_memory():
+    """获取用户记忆"""
     try:
-        main()
-    except KeyboardInterrupt:
-        print("\n")
-        print_status("正在关闭服务...", "warning", "🛑")
-        cleanup_processes()
-        print_status("配置管理系统已停止", "info", "👋")
-        print("\n")
+        user_id = request.args.get('user_id', '').strip()
+        if not user_id:
+            return jsonify({'status': 'error', 'message': '缺少用户ID'})
+
+        # 构建记忆文件路径
+        memory_dir = os.path.join(ROOT_DIR, 'data', 'memory', user_id)
+        short_memory_path = os.path.join(memory_dir, 'short_memory.txt')
+        long_memory_path = os.path.join(memory_dir, 'long_memory_buffer.txt')
+
+        short_memory = ''
+        long_memory = ''
+
+        if os.path.exists(short_memory_path):
+            with open(short_memory_path, 'r', encoding='utf-8') as f:
+                short_memory = f.read()
+
+        if os.path.exists(long_memory_path):
+            with open(long_memory_path, 'r', encoding='utf-8') as f:
+                long_memory = f.read()
+
+        return jsonify({
+            'status': 'success',
+            'user_id': user_id,
+            'short_memory': short_memory,
+            'long_memory': long_memory
+        })
+
     except Exception as e:
-        print_status(f"系统错误: {str(e)}", "error", "💥")
-        cleanup_processes()
+        return jsonify({
+            'status': 'error',
+            'message': str(e)
+        })
+
+@app.route('/update_user_memory', methods=['POST'])
+def update_user_memory():
+    """更新用户记忆"""
+    try:
+        data = request.get_json()
+        user_id = data.get('user_id', '').strip()
+        memory_type = data.get('type', '').strip()
+        content = data.get('content', '').strip()
+
+        if not user_id or not memory_type:
+            return jsonify({'status': 'error', 'message': '缺少必要参数'})
+
+        if memory_type not in ['short', 'long']:
+            return jsonify({'status': 'error', 'message': '无效的记忆类型'})
+
+        # 构建记忆文件路径
+        memory_dir = os.path.join(ROOT_DIR, 'data', 'memory', user_id)
+        os.makedirs(memory_dir, exist_ok=True)
+
+        file_path = os.path.join(memory_dir,
+            'short_memory.txt' if memory_type == 'short' else 'long_memory_buffer.txt')
+
+        with open(file_path, 'w', encoding='utf-8') as f:
+            f.write(content)
+
+        return jsonify({
+            'status': 'success',
+            'message': '记忆更新成功'
+        })
+
+    except Exception as e:
+        return jsonify({
+            'status': 'error',
+            'message': str(e)
+        })

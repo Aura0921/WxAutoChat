@@ -25,7 +25,7 @@ logger = logging.getLogger(__name__)
 
 class MessageHandler:
     def __init__(self, root_dir, api_key, base_url, model, max_token, temperature, 
-                 max_groups, robot_name, prompt_content, image_handler, emoji_handler, voice_handler, memory_handler):
+                 max_groups, robot_name, prompt_content, image_handler, emoji_handler, voice_handler):
         self.root_dir = root_dir
         self.api_key = api_key
         self.model = model
@@ -57,7 +57,38 @@ class MessageHandler:
         self.image_handler = image_handler
         self.emoji_handler = emoji_handler
         self.voice_handler = voice_handler
-        self.memory_handler = memory_handler
+        self.memory_handlers = {}  # 为每个用户存储memory_handler
+
+    def _format_group_reply(
+        self,
+        reply: str,
+        sender_name: str,
+        is_group: bool,
+        at_names: Optional[List[str]],
+    ) -> str:
+        if not is_group:
+            return reply
+        if at_names:
+            prefix = "".join(f"@{n}\u2005" for n in at_names)
+            return f"{prefix}{reply}"
+        return f"@{sender_name} {reply}"
+
+    def refresh_runtime_settings(self) -> None:
+        """从全局配置热更新 LLM 参数（config.json 变更后调用）。"""
+        self.api_key = config.llm.api_key
+        self.model = config.llm.model
+        self.max_token = config.llm.max_tokens
+        self.temperature = config.llm.temperature
+        self.max_groups = config.behavior.context.max_groups
+        self.robot_name = self.wx.A_MyIcon.Name
+        self.deepseek.refresh_runtime_settings(
+            api_key=config.llm.api_key,
+            base_url=config.llm.base_url,
+            model=config.llm.model,
+            max_token=config.llm.max_tokens,
+            temperature=config.llm.temperature,
+            max_groups=config.behavior.context.max_groups,
+        )
 
     def save_message(self, sender_id: str, sender_name: str, message: str, reply: str):
         """保存聊天记录到数据库和短期记忆"""
@@ -73,7 +104,8 @@ class MessageHandler:
             session.commit()
             session.close()
             # 新增短期记忆保存
-            self.memory_handler.add_short_memory(message, reply)
+            memory_handler = self._get_memory_handler(sender_id)
+            memory_handler.add_short_memory(message, reply)
         except Exception as e:
             print(f"保存消息失败: {str(e)}")
 
@@ -90,7 +122,8 @@ class MessageHandler:
                 logger.debug(f"原始提示文件大小: {len(original_content)} bytes")
 
             # 步骤2：获取相关记忆并构造临时提示
-            relevant_memories = self.memory_handler.get_relevant_memories(message)
+            memory_handler = self._get_memory_handler(user_id)
+            relevant_memories = memory_handler.get_relevant_memories(message)
             memory_prompt = "\n# 动态记忆注入\n" + "\n".join(relevant_memories) if relevant_memories else ""
             logger.debug(f"注入记忆条数: {len(relevant_memories)}")
 
@@ -128,6 +161,7 @@ class MessageHandler:
             sender_name = user_data['sender_name']
             username = user_data['username']
             is_group = user_data.get('is_group', False)
+            at_names = user_data.get('at_names') or []
 
         messages = messages[-5:]
         merged_message = ' \\ '.join(messages)
@@ -155,8 +189,10 @@ class MessageHandler:
                         self.wx.SendFiles(filepath=voice_path, who=chat_id)
                     except Exception as e:
                         logger.error(f"发送语音失败: {str(e)}")
-                        if is_group:
-                            reply = f"@{sender_name} {reply}"
+                        reply = self._format_group_reply(
+                            reply, sender_name, is_group, at_names
+                        )
+                        self._apply_reply_delay()
                         self.wx.SendMsg(msg=reply, who=chat_id)
                     finally:
                         try:
@@ -164,8 +200,10 @@ class MessageHandler:
                         except Exception as e:
                             logger.error(f"删除临时语音文件失败: {str(e)}")
                 else:
-                    if is_group:
-                        reply = f"@{sender_name} {reply}"
+                    reply = self._format_group_reply(
+                        reply, sender_name, is_group, at_names
+                    )
+                    self._apply_reply_delay()
                     self.wx.SendMsg(msg=reply, who=chat_id)
                 
                 # 异步保存消息记录
@@ -191,8 +229,10 @@ class MessageHandler:
                         except Exception as e:
                             logger.error(f"删除临时图片失败: {str(e)}")
                     
-                    if is_group:
-                        reply = f"@{sender_name} {reply}"
+                    reply = self._format_group_reply(
+                        reply, sender_name, is_group, at_names
+                    )
+                    self._apply_reply_delay()
                     self.wx.SendMsg(msg=reply, who=chat_id)
                     return
 
@@ -214,8 +254,10 @@ class MessageHandler:
                         except Exception as e:
                             logger.error(f"删除临时图片失败: {str(e)}")
                     
-                    if is_group:
-                        reply = f"@{sender_name} {reply}"
+                    reply = self._format_group_reply(
+                        reply, sender_name, is_group, at_names
+                    )
+                    self._apply_reply_delay()
                     self.wx.SendMsg(msg=reply, who=chat_id)
                     return
 
@@ -233,8 +275,11 @@ class MessageHandler:
                     print("\nAI回复:")
                     print(reply)
                 
-                if is_group:
-                    reply = f"@{sender_name} {reply}"
+                reply = self._format_group_reply(
+                    reply, sender_name, is_group, at_names
+                )
+
+                self._apply_reply_delay()
 
                 # 发送文本回复
                 if '\\' in reply:
@@ -296,8 +341,15 @@ class MessageHandler:
             print(f"错误信息: {str(e)}")
             print("="*50 + "\n")
 
-    def add_to_queue(self, chat_id: str, content: str, sender_name: str, 
-                    username: str, is_group: bool = False):
+    def add_to_queue(
+        self,
+        chat_id: str,
+        content: str,
+        sender_name: str,
+        username: str,
+        is_group: bool = False,
+        at_names: Optional[List[str]] = None,
+    ):
         """添加消息到队列"""
         current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         time_aware_content = f"[{current_time}] {content}"
@@ -309,11 +361,38 @@ class MessageHandler:
                     'messages': [time_aware_content],
                     'sender_name': sender_name,
                     'username': username,
-                    'is_group': is_group
+                    'is_group': is_group,
+                    'at_names': list(at_names) if at_names else [],
                 }
                 self.user_queues[chat_id]['timer'].start()
             else:
                 self.user_queues[chat_id]['timer'].cancel()
                 self.user_queues[chat_id]['messages'].append(time_aware_content)
+                if at_names:
+                    self.user_queues[chat_id]['at_names'] = list(at_names)
                 self.user_queues[chat_id]['timer'] = threading.Timer(5.0, self.process_messages, args=[chat_id])
-                self.user_queues[chat_id]['timer'].start() 
+                self.user_queues[chat_id]['timer'].start()
+
+    def _apply_reply_delay(self):
+        """应用回复延迟"""
+        min_delay = config.behavior.reply_delay.min_seconds
+        max_delay = config.behavior.reply_delay.max_seconds
+        if max_delay > 0:
+            delay = random.uniform(min_delay, max_delay)
+            logger.info(f"应用回复延迟: {delay:.2f}秒")
+            time.sleep(delay)
+
+    def _get_memory_handler(self, user_id: str) -> MemoryHandler:
+        """获取或创建用户的记忆处理器"""
+        if user_id not in self.memory_handlers:
+            self.memory_handlers[user_id] = MemoryHandler(
+                root_dir=self.root_dir,
+                api_key=self.api_key,
+                base_url=config.llm.base_url,
+                model=self.model,
+                max_token=self.max_token,
+                temperature=self.temperature,
+                max_groups=self.max_groups,
+                user_id=user_id
+            )
+        return self.memory_handlers[user_id]

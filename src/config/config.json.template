@@ -29,12 +29,7 @@
                 "model": {
                     "value": "Pro/deepseek-ai/DeepSeek-V3",
                     "type": "string",
-                    "description": "使用的AI模型名称",
-                    "options": [
-                        "deepseek-ai/DeepSeek-V3",
-                        "Pro/deepseek-ai/DeepSeek-V3",
-                        "Pro/deepseek-ai/DeepSeek-R1"
-                    ]
+                    "description": "使用的AI模型名称（支持自定义模型）"
                 },
                 "max_tokens": {
                     "value": 2000,
@@ -144,6 +139,18 @@
                         "type": "string",
                         "description": "人设目录（自动包含 avatar.md 和 emojis 目录）"
                     }
+                },
+                "reply_delay": {
+                    "min_seconds": {
+                        "value": 1.0,
+                        "type": "number",
+                        "description": "回复最小延迟时间（秒）"
+                    },
+                    "max_seconds": {
+                        "value": 5.0,
+                        "type": "number",
+                        "description": "回复最大延迟时间（秒）"
+                    }
                 }
             }
         },
@@ -157,6 +164,37 @@
                     "is_secret": true
                 }
             }
+        },
+        "bot_api_settings": {
+            "title": "机器人 HTTP API",
+            "settings": {
+                "enabled": {
+                    "value": true,
+                    "type": "boolean",
+                    "description": "是否启用机器人进程内的 HTTP API（发消息、最近消息、日志等）"
+                },
+                "host": {
+                    "value": "127.0.0.1",
+                    "type": "string",
+                    "description": "监听地址（仅本机访问建议 127.0.0.1）"
+                },
+                "port": {
+                    "value": 8555,
+                    "type": "number",
+                    "description": "监听端口"
+                },
+                "token": {
+                    "value": "kourichat_default_token_2024",
+                    "type": "string",
+                    "description": "API 访问令牌（留空则不校验；设置后请求头需 Authorization: Bearer <token>）",
+                    "is_secret": true
+                },
+                "config_poll_seconds": {
+                    "value": 2.0,
+                    "type": "number",
+                    "description": "检测 config.json 变更并热更新的轮询间隔（秒）"
+                }
+            }
         }
     }
-} 
+}
