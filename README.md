@@ -1,116 +1,106 @@
-# 🌸 KouriChat - 在虚拟与现实交织处，予永恒的温柔羁绊
+---
 
-  [![GitHub Stars](https://img.shields.io/github/stars/KouriChat/KouriChat?style=for-the-badge&logo=starship&color=ff69b4)](https://github.com/KouriChat/KouriChat/stargazers)
-  [![License](https://img.shields.io/badge/license-MIT-informational?style=for-the-badge)](LICENSE)
-  [![Python](https://img.shields.io/badge/Python-3.11_➔_3.12-3776AB?style=for-the-badge&logo=python&logoColor=white&labelColor=2B5B84)](https://www.python.org/downloads/)
-  [![Community](https://img.shields.io/badge/QQ群-715616260-12B7F3?style=for-the-badge&logo=tencentqq)](https://jq.qq.com/?_wv=1027&k=5z4Q0i7o)
+## 💻 核心技术栈
 
-**有问题可加群**：[715616260](https://jq.qq.com/?_wv=1027&k=5z4Q0i7o)  
-**最新整合包**：[夸克网盘下载](https://pan.quark.cn/s/f37d765e1404)（提取码：zXpP）
+- **编程语言**: Python 3.11+
+- **AI 框架**: DeepSeek LLM, Moonshot AI
+- **微信自动化**: wxauto
+- **Web 框架**: Flask
+- **数据库**: SQLite (SQLAlchemy ORM)
+- **前端**: Bootstrap 5, JavaScript
+- **日志**: Colorama, Logging
+- **系统监控**: psutil
 
 ---
 
-## 🌟 效果示例
+## 🎭 可用角色
 
-<div align="center">
-  <img src="data/images/img/demo.png" width="600" alt="演示效果">
-</div>
+项目预置了多个角色人设：
 
-### 🚀 部署推荐
-- [雨云服务器五折券](https://www.rainyun.com/MzE0MTU=_)
-- [获取DeepSeek API Key](https://cloud.siliconflow.cn/i/aQXU6eC5)（免费15元额度）
+1. **ATRI（亚托莉）**
+   - 来自《ATRI -My Dear Moments-》的女主角
+   - 拥有丰富的情感表达和专属表情包
+   
+2. **MONO**
+   - 可爱活泼的角色设定
+   - 独特的对话风格
+   
+3. **NomalAI**
+   - 通用 AI 助手设定
+   - 适合日常对话
 
----
-
-## 📜 项目声明
- **法律与伦理准则**  
- ▸ 本项目仅供技术研究与学习交流  
- ▸ 禁止用于任何违法或违反道德的场景  
- ▸ 生成内容不代表开发者立场  
-  
- **使用须知**  
- ▸ 角色版权归属原始创作者  
- ▸ 使用者需对自身行为负全责  
- ▸ 未成年人应在监护下使用  
+可通过 WebUI 配置界面自由切换角色。
 
 ---
 
-## 🛠️ 功能全景
+## 📸 功能展示
 
-### ✅ 已实现
-- 微信无缝接入 & 多用户支持
-- 沉浸式角色扮演（支持群聊）
-- 智能对话分段 & 情感化表情包
-- 图像生成 & 图片识别（Kimi集成）
-- 语音消息 & 持久记忆存储
-- 自动更新 & 可视化WebUI
+### 1. 情感表情包系统
+- 根据对话内容自动识别情感（开心、生气、悲伤、平静）
+- 从预设表情包中选择最匹配的动图发送
+- 支持自定义表情包扩展
 
-### 🚧 开发中
-- 智能定时任务系统
-- 记忆整理优化（8B小模型）
-- 分布式负载均衡
-- 数学公式渲染引擎
-- [参与开发计划](https://jq.qq.com/?_wv=1027&k=5z4Q0i7o)
+### 2. 图片识别
+- 发送图片给 AI 进行识别
+- AI 会描述图片内容并给出回应
+- 支持表情包识别
 
----
+### 3. 图像生成
+- 根据文字描述生成对应图片
+- 使用 Janus-Pro-7B 模型
+- 支持多种画风
 
-## 🚀 快速启动
-
-### 环境准备
-1. **备用设备**：安卓手机/模拟器（微信电脑端登录必须有一个移动设备同时登录，因此不能使用您的主要设备。）
-2. **微信小号**：能登录PC版即可
-3. **API密钥**：[获取DeepSeek Key](https://cloud.siliconflow.cn/i/aQXU6eC5)
-
-### 部署流程
-#### 半自动部署流程
-```bash
-运行 点我启动程序.bat
-```
-#### 手动部署流程
-```bash
-# 克隆仓库
-git clone https://github.com/KouriChat/KouriChat.git
-
-# 安装依赖
-pip install -r requirements.txt
-
-#调整配置文件
-python run_config_web.py
-
-# 启动程序
-python run.py
-```
+### 4. 记忆系统
+- 自动记录重要对话内容
+- 定期整理和总结记忆
+- 保持对话连贯性和一致性
 
 ---
 
-## 🧩 项目架构
+## 🔧 常见问题
 
-```
-My-Dream-Moments/
-├── avatars/                      # 角色配置文件
-├── data/                         # 运行数据存储
-├── src/
-│   ├── handlers/                # 功能处理器
-│   ├── services/                # AI服务接口
-│   ├── webui/                   # 可视化配置界面
-│   └── utils/                   # 工具库
-└── version.json                 # 版本管理
-```
+### Q1: 微信初始化失败怎么办？
+A: 请确保：
+- 微信已在 PC 端登录
+- 有一个移动设备同时登录微信
+- 微信窗口处于激活状态
+- 重启程序重试
 
----
+### Q2: 如何修改监听的用户？
+A: 两种方式：
+- 通过 WebUI 配置界面修改监听列表
+- 直接编辑 `src/config/config.json` 文件
 
-## 💖 支持我们
-<div align="center">
-  <p>您的支持将助力项目持续进化</p>
-  <img src="data/images/img/qrcode.jpg" width="450" alt="支持二维码" style="border:3px solid #eee; border-radius:12px">
-</div>
+### Q3: 表情包如何自定义？
+A: 在 `data/avatars/{角色}/emojis/` 目录下：
+- `happy/`: 开心类表情
+- `angry/`: 生气类表情
+- `sad/`: 悲伤类表情
+- `neutral/`: 平静类表情
+将 GIF 动图放入对应文件夹即可
+
+### Q4: API Key 在哪里获取？
+A: 
+- DeepSeek: [硅基流动](https://cloud.siliconflow.cn/i/aQXU6eC5)
+- Moonshot: [月之暗面](https://platform.moonshot.cn/)
 
 ---
 
 ## 🌐 社区互动
-- [哔哩哔哩频道](https://space.bilibili.com/209397245)
-- 技术交流群：[715616260](https://jq.qq.com/?_wv=1027&k=5z4Q0i7o) 
-- 通过邮箱与我们联系：[yangchenglin2004@foxmail.com](mailto:yangchenglin2004@foxmail.com) 
+
+- **QQ 交流群**：[715616260](https://jq.qq.com/?_wv=1027&k=5z4Q0i7o)
+- **哔哩哔哩**：[视频频道](https://space.bilibili.com/209397245)
+- **联系邮箱**：[yangchenglin2004@foxmail.com](mailto:yangchenglin2004@foxmail.com)
+
+---
+
+## 💖 支持与鸣谢
+
+感谢所有为项目做出贡献的开发者！
+
+特别感谢：
+- 原项目作者：[iwyxdxl](https://github.com/iwyxdxl)
+- 所有提供反馈和建议的社区成员
 
 ---
 
@@ -121,9 +111,19 @@ My-Dream-Moments/
     <img src="https://img.shields.io/badge/Python-3.11_➔_3.12-0073B7?logo=python&logoColor=white" alt="Python">
   </a>
   <a href="https://github.com/cluic/wxauto" target="_blank">
-    <img src="https://img.shields.io/badge/wxauto-自动化框架-0099E5?logo=wechat&logoColor=white" alt="wxauto">
+    <img src="https://img.shields.io/badge/wxauto-自动化框架 -0099E5?logo=wechat&logoColor=white" alt="wxauto">
   </a>
-
+  <a href="https://deepseek.com/" target="_blank">
+    <img src="https://img.shields.io/badge/DeepSeek-LLM 服务 -FF6B6B?logo=data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCI+PHBhdGggZmlsbD0iI2ZmZiIgZD0iTTEyIDJMMiA3bDEwIDUgMTAtNS0xMC01eiIvPjxwYXRoIGZpbGw9IiNmZmYiIGQ9Ik0yIDE3bDEwIDUgMTAtNU0yIDEybDEwIDUgMTAtNSIvPjwvc3ZnPg==" alt="DeepSeek">
+  </a>
 </div>
 
-[![Star History](https://api.star-history.com/svg?repos=KouriChat/KouriChat&type=Timeline)](https://star-history.com/#KouriChat/KouriChat)
+---
+
+## 📄 许可证
+
+本项目采用 MIT 许可证 - 详见 [LICENSE](LICENSE) 文件
+
+---
+
+[![Star History](https://api.star-history.com/svg?repos=iwyxdxl/My-Dream-Moments&type=Timeline)](https://star-history.com/#iwyxdxl/My-Dream-Moments)
